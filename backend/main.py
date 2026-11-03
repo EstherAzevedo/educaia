@@ -1,19 +1,29 @@
 
-from fastapi import FastAPI
-from pydantic import BaseModel, Field
+import logging
 from typing import Literal
 
+import httpx
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+from google.genai import errors
+
 from ai_service import generate_study_content
+
+
+# Configuração dos logs
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 app = FastAPI(
     title="EducaIA API",
     description="API do assistente de estudos com IA generativa",
-    version="0.3.0"
+    version="0.4.0"
 )
 
 
-# Dados recebidos pela API
+# Modelo dos dados recebidos
 class StudyRequest(BaseModel):
     text: str = Field(
         min_length=20,
@@ -24,7 +34,7 @@ class StudyRequest(BaseModel):
     task: Literal["summarize", "explain", "quiz"]
 
 
-# Dados devolvidos pela API
+# Modelo dos dados devolvidos
 class StudyResponse(BaseModel):
     status: str
     task: str
@@ -44,11 +54,61 @@ def health_check():
 @app.post("/study", response_model=StudyResponse)
 def process_study(request: StudyRequest):
 
-    # Solicita o processamento do conteúdo pela IA
-    result = generate_study_content(
-        text=request.text,
-        task=request.task
-    )
+    try:
+        # Solicita o processamento do conteúdo pela IA
+        result = generate_study_content(
+            text=request.text,
+            task=request.task
+        )
+
+    except errors.APIError as exc:
+        # Erros retornados pela API do Gemini
+        logger.error(
+            "Erro na API Gemini. Código: %s. Mensagem: %s",
+            exc.code,
+            exc.message
+        )
+
+        if exc.code in (429, 503):
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "O serviço de IA está temporariamente indisponível "
+                    "ou atingiu um limite de utilização. Tente novamente."
+                )
+            ) from exc
+
+        raise HTTPException(
+            status_code=502,
+            detail="Não foi possível obter uma resposta do serviço de IA."
+        ) from exc
+
+    except httpx.TimeoutException as exc:
+        # O serviço demorou além do tempo limite
+        logger.warning("Tempo limite excedido na comunicação com o Gemini.")
+
+        raise HTTPException(
+            status_code=504,
+            detail="O serviço de IA demorou para responder. Tente novamente."
+        ) from exc
+
+    except httpx.RequestError as exc:
+        # Problemas de conexão ou comunicação
+        logger.exception("Falha de comunicação com o Gemini.")
+
+        raise HTTPException(
+            status_code=502,
+            detail="Não foi possível estabelecer comunicação com o serviço de IA."
+        ) from exc
+
+    except Exception as exc:
+        # Outros erros inesperados
+        logger.exception("Erro inesperado ao processar solicitação.")
+
+        raise HTTPException(
+            status_code=500,
+            detail="Ocorreu um erro interno ao processar sua solicitação."
+        ) from exc
 
     return {
         "status": "success",
