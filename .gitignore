@@ -1,5 +1,12 @@
-
+# Variáveis de ambiente e credenciais
 .env
+*.env
+
+# Ambiente virtual Python
 .venv/
 __pycache__/
 *.py[cod]
+
+# Configurações do editor
+.vscode/
+.idea/
