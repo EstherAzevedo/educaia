@@ -1,4 +1,5 @@
 
+from fastapi.middleware.cors import CORSMiddleware
 import logging
 from typing import Literal
 
@@ -20,6 +21,20 @@ app = FastAPI(
     title="EducaIA API",
     description="API do assistente de estudos com IA generativa",
     version="0.4.0"
+)
+
+# Configuração de CORS
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 

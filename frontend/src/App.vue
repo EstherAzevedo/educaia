@@ -1,9 +1,37 @@
-
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { generateStudyContent } from '../services/studyService'
+import type { StudyTask, StudyResponse } from '../types/study'
 
-// Tipos de tarefas que o EducaIA oferece
-type StudyTask = 'summarize' | 'explain' | 'quiz'
+const isLoading = ref(false)
+const errorMessage = ref('')
+const studyResult = ref<StudyResponse | null>(null)
+
+async function handleGenerate() {
+  if (!canGenerate.value || isLoading.value || !selectedTask.value) {
+    return
+  }
+
+  isLoading.value = true
+  errorMessage.value = ''
+  studyResult.value = null
+
+  try {
+    const response = await generateStudyContent({
+      text: studyText.value.trim(),
+      task: selectedTask.value,
+    })
+
+    studyResult.value = response
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error
+        ? error.message
+        : 'Ocorreu um erro inesperado. Tente novamente.'
+  } finally {
+    isLoading.value = false
+  }
+}
 
 // Opções disponíveis na interface
 const tasks = [
@@ -86,15 +114,9 @@ function selectTask(task: StudyTask) {
         </div>
 
         <div class="task-options">
-          <button
-            v-for="task in tasks"
-            :key="task.id"
-            type="button"
-            class="task-option"
-            :class="{ selected: selectedTask === task.id }"
-            :aria-pressed="selectedTask === task.id"
-            @click="selectTask(task.id)"
-          >
+          <button v-for="task in tasks" :key="task.id" type="button" class="task-option"
+            :class="{ selected: selectedTask === task.id }" :aria-pressed="selectedTask === task.id"
+            @click="selectTask(task.id)">
             <span class="task-icon">{{ task.icon }}</span>
             <strong>{{ task.title }}</strong>
             <span>{{ task.description }}</span>
@@ -104,12 +126,8 @@ function selectTask(task: StudyTask) {
         <div class="input-section">
           <label for="study-text">Seu material de estudo</label>
 
-          <textarea
-            id="study-text"
-            v-model="studyText"
-            maxlength="12000"
-            placeholder="Cole aqui o texto que deseja estudar..."
-          ></textarea>
+          <textarea id="study-text" v-model="studyText" maxlength="12000"
+            placeholder="Cole aqui o texto que deseja estudar..."></textarea>
 
           <div class="input-footer">
             <span>Insira entre 20 e 12.000 caracteres.</span>
@@ -117,14 +135,28 @@ function selectTask(task: StudyTask) {
           </div>
         </div>
 
-        <button
-          class="generate-button"
-          type="button"
-          :disabled="!canGenerate"
-        >
-          Gerar conteúdo
-          <span>✦</span>
+        <button class="generate-button" type="button" :disabled="!canGenerate || isLoading" @click="handleGenerate">
+          {{ isLoading ? 'Gerando conteúdo...' : 'Gerar conteúdo' }}
+          <span v-if="!isLoading">✦</span>
         </button>
+
+        <!-- Mensagem de erro -->
+        <p v-if="errorMessage" class="feedback error" role="alert">
+          {{ errorMessage }}
+        </p>
+
+        <!-- Resultado gerado pela IA -->
+        <section v-if="studyResult" class="result-section" aria-live="polite">
+          <h2>Seu resultado</h2>
+
+          <p class="result-message">
+            {{ studyResult.message }}
+          </p>
+
+          <div class="result-content">
+            {{ studyResult.result }}
+          </div>
+        </section>
       </section>
     </main>
 
@@ -301,7 +333,7 @@ textarea {
   font-size: 14px;
 }
 
-.task-option > span:last-child {
+.task-option>span:last-child {
   color: #898294;
   font-size: 12px;
   line-height: 1.4;
@@ -414,7 +446,7 @@ textarea {
     font-size: 12px;
   }
 
-  .task-option > span:last-child {
+  .task-option>span:last-child {
     font-size: 10px;
   }
 
@@ -423,5 +455,41 @@ textarea {
     align-items: center;
     text-align: center;
   }
+}
+
+.feedback {
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+.error {
+  color: #dc2626;
+}
+
+.result-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: #ffffff;
+  border: 1px solid #e6d9ff;
+  border-radius: 16px;
+}
+
+.result-section h2 {
+  margin-bottom: 12px;
+  color: #6d28d9;
+  font-size: 20px;
+}
+
+.result-message {
+  margin-bottom: 16px;
+  color: #6b6477;
+  font-size: 14px;
+}
+
+.result-content {
+  color: #29213b;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 </style>
